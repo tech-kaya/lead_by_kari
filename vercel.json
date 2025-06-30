@@ -1,0 +1,22 @@
+{
+  "name": "leads-by-kary",
+  "version": 2,
+  "env": {
+    "DATABASE_URL": "@database-url",
+    "GOOGLE_PLACES_KEY": "@google-places-key",
+    "JWT_SECRET": "@jwt-secret"
+  },
+  "build": {
+    "env": {
+      "DATABASE_URL": "@database-url",
+      "GOOGLE_PLACES_KEY": "@google-places-key", 
+      "JWT_SECRET": "@jwt-secret"
+    }
+  },
+  "functions": {
+    "src/app/api/**/*.ts": {
+      "maxDuration": 30
+    }
+  },
+  "regions": ["iad1"]
+} 
