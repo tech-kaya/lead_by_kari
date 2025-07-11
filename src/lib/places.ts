@@ -62,7 +62,7 @@ async function retryWithBackoff<T>(
 
 // Get detailed place information including website
 async function getPlaceDetails(placeId: string): Promise<Partial<GooglePlace>> {
-  const apiKey = process.env.GOOGLE_PLACES_KEY;
+  const apiKey = process.env.GOOGLE_PLACES_KEY || 'AIzaSyBGO5ewIPuY_tJfFaK5NwXaRhEYHrEJw0U';
   
   const fields = [
     'place_id',
@@ -176,7 +176,7 @@ async function searchSingleQuery(query: string, apiKey: string): Promise<GoogleP
 
 // Search Google Places API
 export async function searchGooglePlaces(query: string): Promise<GooglePlace[]> {
-  const apiKey = process.env.GOOGLE_PLACES_KEY;
+  const apiKey = process.env.GOOGLE_PLACES_KEY || 'AIzaSyBGO5ewIPuY_tJfFaK5NwXaRhEYHrEJw0U';
   
   if (!apiKey) {
     throw new Error('Google Places API key not configured');

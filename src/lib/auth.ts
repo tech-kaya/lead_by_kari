@@ -2,9 +2,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import type { NextRequest } from 'next/server';
 
-const JWT_SECRET = process.env.JWT_SECRET || (() => {
-  throw new Error('JWT_SECRET environment variable is required');
-})();
+const JWT_SECRET = process.env.JWT_SECRET || '49d0fd3ee6b88e80213be2ba37f339507355c9a1648db7bc1147cc4bbe74df06';
 const SALT_ROUNDS = 12; // Higher salt rounds for better security
 
 export interface User {
