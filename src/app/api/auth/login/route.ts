@@ -24,7 +24,7 @@ export async function POST(request: NextRequest) {
 
     // Find user by email
     const result = await pool.query(
-      'SELECT id, email, password, name FROM users WHERE email = $1',
+      'SELECT id, email, password, first_name, last_name FROM users WHERE email = $1',
       [email.toLowerCase()]
     );
 
@@ -53,7 +53,12 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json(
       { 
         message: 'Login successful',
-        user: { id: user.id, email: user.email, name: user.name }
+        user: { 
+          id: user.id, 
+          email: user.email, 
+          first_name: user.first_name, 
+          last_name: user.last_name 
+        }
       },
       { status: 200 }
     );

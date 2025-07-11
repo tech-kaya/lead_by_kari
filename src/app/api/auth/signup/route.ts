@@ -5,12 +5,12 @@ import { hashPassword, generateToken, isValidEmail, isValidPassword } from '@/li
 
 export async function POST(request: NextRequest) {
   try {
-    const { email, password, name, phone, address, city, country } = await request.json();
+    const { email, password, first_name, last_name, phone, address, city, country } = await request.json();
 
     // Input validation
-    if (!email || !password || !name) {
+    if (!email || !password || !first_name) {
       return NextResponse.json(
-        { error: 'Email, password, and name are required' },
+        { error: 'Email, password, and first name are required' },
         { status: 400 }
       );
     }
@@ -45,10 +45,10 @@ export async function POST(request: NextRequest) {
     // Hash password and create user
     const hashedPassword = await hashPassword(password);
     const result = await pool.query(
-      `INSERT INTO users (email, password, name, phone, address, city, country) 
-       VALUES ($1, $2, $3, $4, $5, $6, $7) 
-       RETURNING id, email, name`,
-      [email.toLowerCase(), hashedPassword, name, phone, address, city, country]
+      `INSERT INTO users (email, password, first_name, last_name, phone, address, city, country) 
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8) 
+       RETURNING id, email, first_name, last_name`,
+      [email.toLowerCase(), hashedPassword, first_name, last_name, phone, address, city, country]
     );
 
     const user = result.rows[0];
@@ -60,7 +60,7 @@ export async function POST(request: NextRequest) {
     const response = NextResponse.json(
       { 
         message: 'User created successfully',
-        user: { id: user.id, email: user.email, name: user.name }
+        user: { id: user.id, email: user.email, first_name: user.first_name, last_name: user.last_name }
       },
       { status: 201 }
     );

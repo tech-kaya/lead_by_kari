@@ -17,6 +17,25 @@ export interface SearchResponse {
   warning?: string;
 }
 
+export interface ContactRequest {
+  id: number;
+  user_id: number;
+  user_email: string;
+  place_id: string;
+  company_name: string;
+  company_email?: string;
+  company_phone?: string;
+  company_website?: string;
+  status: string;
+  created_at: string;
+}
+
+export interface ContactResponse {
+  message: string;
+  requests: ContactRequest[];
+  user: { email: string; name: string };
+}
+
 // Generic API request handler with error handling
 async function apiRequest<T>(
   url: string,
@@ -49,7 +68,8 @@ export const auth = {
   async signUp(userData: {
     email: string;
     password: string;
-    name: string;
+    first_name: string;
+    last_name?: string;
     phone?: string;
     address?: string;
     city?: string;
@@ -84,6 +104,45 @@ export const search = {
     return apiRequest<SearchResponse>('/api/search', {
       method: 'POST',
       body: JSON.stringify({ query, forceFresh }),
+    });
+  },
+};
+
+// Contact API calls
+export const contact = {
+  async sendRequests(place_ids: string[]): Promise<ApiResponse<ContactResponse>> {
+    console.log('API Library - Sending contact request with place_ids:', place_ids);
+    
+    // Get user email from localStorage
+    let email = '';
+    
+    try {
+      // Check for user data in localStorage
+      const userData = localStorage.getItem('user');
+      if (userData) {
+        const user = JSON.parse(userData);
+        email = user.email || '';
+      }
+      
+      // Fallback to email stored separately
+      if (!email) {
+        email = localStorage.getItem('email') || '';
+      }
+    } catch (error) {
+      console.error('Error reading user data from localStorage:', error);
+      // Fallback to email stored separately
+      email = localStorage.getItem('email') || '';
+    }
+    
+    const payload = { 
+      email,
+      place_ids
+    };
+    console.log('API Library - Request payload:', payload);
+    
+    return apiRequest<ContactResponse>('/api/contact', {
+      method: 'POST',
+      body: JSON.stringify(payload),
     });
   },
 };

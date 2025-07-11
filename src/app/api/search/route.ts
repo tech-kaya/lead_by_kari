@@ -60,56 +60,69 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ places: [] });
       }
 
-      // Upsert Google Places results into database
-      const upsertPromises = googlePlaces.map(async (googlePlace) => {
-        const formattedPlace = formatGooglePlace(googlePlace);
+      // Upsert Google Places results into database in batches
+      const upsertedPlaces: Place[] = [];
+      const batchSize = 3; // Process 3 places at a time to avoid overwhelming the connection pool
+      
+      for (let i = 0; i < googlePlaces.length; i += batchSize) {
+        const batch = googlePlaces.slice(i, i + batchSize);
         
-        try {
-          const result = await pool.query(
-            `INSERT INTO places (place_id, name, address, city, latitude, longitude, category, phone, website)
-             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-             ON CONFLICT (place_id) 
-             DO UPDATE SET 
-               name = EXCLUDED.name,
-               address = EXCLUDED.address,
-               city = EXCLUDED.city,
-               latitude = EXCLUDED.latitude,
-               longitude = EXCLUDED.longitude,
-               category = EXCLUDED.category,
-               phone = EXCLUDED.phone,
-               website = EXCLUDED.website,
-               stored_at = NOW()
-             RETURNING *`,
-            [
-              formattedPlace.place_id,
-              formattedPlace.name,
-              formattedPlace.address,
-              formattedPlace.city,
-              formattedPlace.latitude,
-              formattedPlace.longitude,
-              formattedPlace.category,
-              formattedPlace.phone,
-              formattedPlace.website
-            ]
-          );
+        const batchPromises = batch.map(async (googlePlace) => {
+          const formattedPlace = formatGooglePlace(googlePlace);
           
-          return {
-            ...result.rows[0],
-            stored_at: new Date(result.rows[0].stored_at)
-          } as Place;
-        } catch (dbError) {
-          console.error('Error upserting place:', formattedPlace.place_id, dbError);
-          // Return formatted place even if DB upsert fails
-          return {
-            id: 0, // Temporary ID for non-persisted places
-            ...formattedPlace,
-            stored_at: new Date()
-          } as Place;
-        }
-      });
+          try {
+            const result = await pool.query(
+              `INSERT INTO places (place_id, name, address, city, latitude, longitude, category, phone, website)
+               VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+               ON CONFLICT (place_id) 
+               DO UPDATE SET 
+                 name = EXCLUDED.name,
+                 address = EXCLUDED.address,
+                 city = EXCLUDED.city,
+                 latitude = EXCLUDED.latitude,
+                 longitude = EXCLUDED.longitude,
+                 category = EXCLUDED.category,
+                 phone = EXCLUDED.phone,
+                 website = EXCLUDED.website,
+                 stored_at = NOW()
+               RETURNING *`,
+              [
+                formattedPlace.place_id,
+                formattedPlace.name,
+                formattedPlace.address,
+                formattedPlace.city,
+                formattedPlace.latitude,
+                formattedPlace.longitude,
+                formattedPlace.category,
+                formattedPlace.phone,
+                formattedPlace.website
+              ]
+            );
+            
+            return {
+              ...result.rows[0],
+              stored_at: new Date(result.rows[0].stored_at)
+            } as Place;
+          } catch (dbError) {
+            console.error('Error upserting place:', formattedPlace.place_id, dbError);
+            // Return formatted place even if DB upsert fails
+            return {
+              id: 0, // Temporary ID for non-persisted places
+              ...formattedPlace,
+              stored_at: new Date()
+            } as Place;
+          }
+        });
 
-      // Wait for all upserts to complete
-      const upsertedPlaces = await Promise.all(upsertPromises);
+        // Process batch and add to results
+        const batchResults = await Promise.all(batchPromises);
+        upsertedPlaces.push(...batchResults);
+        
+        // Small delay between batches to prevent overwhelming the database
+        if (i + batchSize < googlePlaces.length) {
+          await new Promise(resolve => setTimeout(resolve, 100));
+        }
+      }
       
       console.log(`Upserted ${upsertedPlaces.length} places from Google Places API`);
       

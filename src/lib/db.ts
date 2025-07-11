@@ -4,10 +4,11 @@ import { Pool } from 'pg';
 // Using a pool for better performance and connection management
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
-  ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: false } : false,
-  max: 20, // Maximum number of clients in the pool
-  idleTimeoutMillis: 30000, // Close idle clients after 30 seconds
-  connectionTimeoutMillis: 2000, // Return error after 2 seconds if connection could not be established
+  ssl: process.env.DATABASE_URL?.includes('amazonaws.com') ? { rejectUnauthorized: false } : false,
+  max: 5, // Reduced max connections to avoid overwhelming RDS
+  idleTimeoutMillis: 60000, // Keep connections alive longer
+  connectionTimeoutMillis: 15000, // Increased timeout for AWS RDS
+  statement_timeout: 30000, // SQL statement timeout
 });
 
 // Test database connection on startup

@@ -10,7 +10,8 @@ const SALT_ROUNDS = 12; // Higher salt rounds for better security
 export interface User {
   id: number;
   email: string;
-  name: string;
+  first_name: string;
+  last_name?: string;
   phone?: string;
   address?: string;
   city?: string;
