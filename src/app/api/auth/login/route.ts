@@ -74,7 +74,12 @@ export async function POST(request: NextRequest) {
     return response;
 
   } catch (error) {
-    console.error('Login error:', error);
+    console.error('Login error details:', {
+      error: error instanceof Error ? error.message : error,
+      stack: error instanceof Error ? error.stack : undefined,
+      databaseUrl: process.env.DATABASE_URL ? 'Set' : 'Not set',
+      jwtSecret: process.env.JWT_SECRET ? 'Set' : 'Not set'
+    });
     return NextResponse.json(
       { error: 'Internal server error' },
       { status: 500 }
