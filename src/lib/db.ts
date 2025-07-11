@@ -4,7 +4,7 @@ import { Pool } from 'pg';
 // Using a pool for better performance and connection management
 const pool = new Pool({
   connectionString: 'postgresql://postgress:Postgress123@postgress.csl4s28gcsqu.us-east-1.rds.amazonaws.com:5432/postgress',
-  ssl: process.env.DATABASE_URL || 'postgresql://postgress:Postgress123@postgress.csl4s28gcsqu.us-east-1.rds.amazonaws.com:5432/postgress?sslmode=require'?.includes('amazonaws.com') ? { rejectUnauthorized: false } : false,
+  ssl: process.env.DATABASE_URL || 'postgresql://postgress:Postgress123@postgress.csl4s28gcsqu.us-east-1.rds.amazonaws.com:5432/postgress'?.includes('amazonaws.com') ? { rejectUnauthorized: false } : false,
   max: 5, // Reduced max connections to avoid overwhelming RDS
   idleTimeoutMillis: 60000, // Keep connections alive longer
   connectionTimeoutMillis: 15000, // Increased timeout for AWS RDS
