@@ -6,6 +6,7 @@ import SearchForm, { type SearchParams } from '@/components/SearchForm';
 import PlaceCard from '@/components/PlaceCard';
 import { search, auth, contact } from '@/lib/api';
 import type { Place } from '@/lib/places';
+import { downloadAsCSV, downloadAsExcel } from '@/lib/download';
 
 export default function DashboardPage() {
   const [places, setPlaces] = useState<Place[]>([]);
@@ -144,10 +145,42 @@ export default function DashboardPage() {
     }
   };
 
+  const handleDownloadSelected = (format: 'csv' | 'excel') => {
+    const selectedData = places.filter(place => selectedPlaces.has(place.place_id));
+    
+    if (selectedData.length === 0) {
+      setError('Please select at least one company to download');
+      return;
+    }
+
+    const filename = `selected-leads-${new Date().toISOString().split('T')[0]}`;
+    
+    if (format === 'csv') {
+      downloadAsCSV(selectedData, `${filename}.csv`);
+    } else {
+      downloadAsExcel(selectedData, `${filename}.xlsx`);
+    }
+  };
+
+  const handleDownloadAll = (format: 'csv' | 'excel') => {
+    if (places.length === 0) {
+      setError('No leads available to download');
+      return;
+    }
+
+    const filename = `all-leads-${new Date().toISOString().split('T')[0]}`;
+    
+    if (format === 'csv') {
+      downloadAsCSV(places, `${filename}.csv`);
+    } else {
+      downloadAsExcel(places, `${filename}.xlsx`);
+    }
+  };
+
   if (!isAuthenticated) {
     return (
       <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600"></div>
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600" />
       </div>
     );
   }
@@ -308,7 +341,8 @@ export default function DashboardPage() {
 
             {/* Bulk Actions */}
             <div className="mb-8 p-6 bg-gradient-to-r from-gray-50 to-blue-50 rounded-xl border border-gray-200 shadow-sm">
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+              <div className="flex flex-col lg:flex-row lg:items-center lg:justify-between gap-6">
+                {/* Selection Controls */}
                 <div className="flex items-center space-x-4">
                   <label className="flex items-center space-x-3 cursor-pointer">
                     <input
@@ -325,33 +359,97 @@ export default function DashboardPage() {
                     {selectedPlaces.size} of {places.length} selected
                   </div>
                 </div>
-                <div className="flex items-center space-x-3">
-                  {selectedPlaces.size > 0 && (
-                    <button
-                      type="button"
-                      onClick={() => handleContactSelected()}
-                      disabled={isContactLoading}
-                      className="inline-flex items-center px-6 py-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 shadow-md"
-                    >
-                      {isContactLoading ? (
-                        <>
-                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
-                          Sending Requests...
-                        </>
-                      ) : (
-                        <>
-                          <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                            <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
-                            <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+
+                {/* Action Buttons */}
+                <div className="flex flex-col sm:flex-row gap-4">
+                  {/* Contact Actions */}
+                  <div className="flex items-center space-x-3">
+                    {selectedPlaces.size > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => handleContactSelected()}
+                        disabled={isContactLoading}
+                        className="inline-flex items-center px-4 py-2.5 bg-gradient-to-r from-indigo-600 to-purple-600 text-white text-sm font-semibold rounded-lg hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 transition-all duration-200 shadow-md"
+                      >
+                        {isContactLoading ? (
+                          <>
+                            <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-white mr-2" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+                              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+                            </svg>
+                            Contact ({selectedPlaces.size})
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Download Actions */}
+                  <div className="flex items-center space-x-2">
+                    {/* Download Selected */}
+                    {selectedPlaces.size > 0 && (
+                      <div className="flex items-center space-x-1">
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSelected('csv')}
+                          className="inline-flex items-center px-3 py-2.5 bg-green-600 text-white text-sm font-medium rounded-l-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors"
+                          title="Download selected as CSV"
+                        >
+                          <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
                           </svg>
-                          Contact Selected ({selectedPlaces.size})
-                        </>
-                      )}
-                    </button>
-                  )}
+                          CSV
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadSelected('excel')}
+                          className="inline-flex items-center px-3 py-2.5 bg-green-600 text-white text-sm font-medium rounded-r-lg hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-colors border-l border-green-500"
+                          title="Download selected as Excel"
+                        >
+                          <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                            <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                          </svg>
+                          Excel
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Download All */}
+                    <div className="flex items-center space-x-1">
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAll('csv')}
+                        className="inline-flex items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-l-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors"
+                        title="Download all results as CSV"
+                      >
+                        <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        All CSV
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleDownloadAll('excel')}
+                        className="inline-flex items-center px-3 py-2.5 bg-blue-600 text-white text-sm font-medium rounded-r-lg hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-colors border-l border-blue-500"
+                        title="Download all results as Excel"
+                      >
+                        <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                          <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                        All Excel
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Help Text */}
                   {selectedPlaces.size === 0 && (
-                    <div className="text-sm text-gray-500 italic">
-                      Select companies to send bulk contact requests
+                    <div className="text-sm text-gray-500 italic sm:ml-4">
+                      Select companies for targeted actions
                     </div>
                   )}
                 </div>
