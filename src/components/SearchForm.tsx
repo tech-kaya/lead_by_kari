@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { search } from '@/lib/api';
 
 interface SearchFormProps {
   onSearch: (searchParams: SearchParams, forceFresh: boolean) => void;
@@ -24,9 +25,29 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     keywords: ''
   });
   const [forceFresh, setForceFresh] = useState(false);
+  const [smartQuery, setSmartQuery] = useState('');
+  const [isParsingQuery, setIsParsingQuery] = useState(false);
 
   const handleInputChange = (field: keyof SearchParams, value: string) => {
     setSearchParams(prev => ({ ...prev, [field]: value }));
+  };
+
+  const handleSmartQueryChange = (value: string) => {
+    setSmartQuery(value);
+    // Clear manual form fields when smart query is entered
+    if (value.trim()) {
+      setSearchParams({
+        location: '',
+        industry: '',
+        companyType: '',
+        facilityType: '',
+        keywords: ''
+      });
+    }
+  };
+
+  const clearSmartQuery = () => {
+    setSmartQuery('');
   };
 
   const buildSearchQuery = (params: SearchParams): string => {
@@ -41,15 +62,44 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
     return parts.join(' ') || params.location || 'businesses';
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    const query = buildSearchQuery(searchParams);
-    if (query.trim()) {
-      onSearch(searchParams, forceFresh);
+    
+    // If there's a smart query, parse it first, then search
+    if (smartQuery.trim()) {
+      setIsParsingQuery(true);
+      
+      try {
+        const response = await search.parseQuery(smartQuery);
+        
+        if (response.error) {
+          console.error('Parse error:', response.error);
+          alert(`Failed to parse query: ${response.error}`);
+          setIsParsingQuery(false);
+          return;
+        }
+        
+        if (response.data) {
+          // Use parsed parameters for search
+          onSearch(response.data.searchParams, forceFresh);
+        }
+      } catch (error) {
+        console.error('Parse query error:', error);
+        alert('Failed to parse query. Please try again.');
+      } finally {
+        setIsParsingQuery(false);
+      }
+    } else {
+      // Use manual form parameters
+      const query = buildSearchQuery(searchParams);
+      if (query.trim()) {
+        onSearch(searchParams, forceFresh);
+      }
     }
   };
 
-  const isFormValid = searchParams.location.trim() || searchParams.industry.trim() || 
+  const isFormValid = smartQuery.trim() || 
+                      searchParams.location.trim() || searchParams.industry.trim() || 
                       searchParams.companyType.trim() || searchParams.facilityType.trim() || 
                       searchParams.keywords.trim();
 
@@ -61,8 +111,62 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           <p className="text-gray-600">Use our advanced filters to discover high-quality prospects in your target market</p>
         </div>
 
+        {/* Smart Query Section */}
+        <div className="mb-8 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+          <div className="flex items-center mb-4">
+            <h3 className="text-lg font-semibold text-purple-900">AI Smart Search</h3>
+          </div>
+          
+          <p className="text-sm text-purple-700 mb-4">
+            Describe what you&apos;re looking for in natural language, and our AI will automatically parse your query and search for leads!
+          </p>
+          
+                      <div className="flex flex-col space-y-4">
+            <div className="flex flex-col space-y-2">
+              <div className="flex items-center justify-between">
+                <label htmlFor="smartQuery" className="text-sm font-medium text-purple-800">
+                  Natural Language Query
+                </label>
+                {smartQuery && (
+                  <button
+                    type="button"
+                    onClick={clearSmartQuery}
+                    disabled={isLoading || isParsingQuery}
+                    className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
+                  >
+                    Clear
+                  </button>
+                )}
+              </div>
+              <textarea
+                id="smartQuery"
+                value={smartQuery}
+                onChange={(e) => handleSmartQueryChange(e.target.value)}
+                placeholder="e.g., 'small tech companies in London' or 'restaurants and cafes in New York City' or 'healthcare startups in San Francisco'"
+                className="w-full text-black px-4 py-3 bg-white border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all duration-200 shadow-sm hover:border-purple-300 resize-none"
+                rows={3}
+                disabled={isLoading || isParsingQuery}
+                maxLength={500}
+              />
+              <div className="text-xs text-purple-600">
+                {smartQuery.length}/500 characters
+              </div>
+            </div>
+            
+
+          </div>
+        </div>
+
         <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          <div className="flex items-center justify-center py-4">
+            <div className="flex-1 border-t border-gray-300" />
+            <div className="px-4 text-sm text-gray-500 font-medium">OR use manual filters below</div>
+            <div className="flex-1 border-t border-gray-300" />
+          </div>
+          
+          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 transition-opacity duration-200 ${
+            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
+          }`}>
             {/* Location */}
             <div className="flex flex-col space-y-3">
               <label htmlFor="location" className="text-sm font-semibold text-gray-800 flex items-center">
@@ -78,7 +182,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 onChange={(e) => handleInputChange('location', e.target.value)}
                 placeholder="City, state, ZIP code, or region..."
                 className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading}
+                disabled={isLoading || smartQuery.trim() !== ''}
               />
             </div>
 
@@ -96,7 +200,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 value={searchParams.industry}
                 onChange={(e) => handleInputChange('industry', e.target.value)}
                 className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading}
+                disabled={isLoading || smartQuery.trim() !== ''}
               >
                 <option value="">Select industry...</option>
                 <option value="restaurant">Restaurants & Food Service</option>
@@ -130,7 +234,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 value={searchParams.companyType}
                 onChange={(e) => handleInputChange('companyType', e.target.value)}
                 className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading}
+                disabled={isLoading || smartQuery.trim() !== ''}
               >
                 <option value="">Select company type...</option>
                 <option value="small business">Small Business</option>
@@ -157,7 +261,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 value={searchParams.facilityType}
                 onChange={(e) => handleInputChange('facilityType', e.target.value)}
                 className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading}
+                disabled={isLoading || smartQuery.trim() !== ''}
               >
                 <option value="">Select facility type...</option>
                 <option value="office">Office Building</option>
@@ -175,7 +279,9 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
           </div>
 
           {/* Keywords */}
-          <div className="flex flex-col space-y-3">
+          <div className={`flex flex-col space-y-3 transition-opacity duration-200 ${
+            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
+          }`}>
             <label htmlFor="keywords" className="text-sm font-semibold text-gray-800 flex items-center">
               <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
                 <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
@@ -189,11 +295,13 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
               onChange={(e) => handleInputChange('keywords', e.target.value)}
               placeholder="Specific business names, services, or additional search terms..."
               className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-              disabled={isLoading}
+              disabled={isLoading || smartQuery.trim() !== ''}
             />
           </div>
 
-          <div className="flex items-center justify-between pt-4 border-t border-gray-200">
+          <div className={`pt-4 border-t border-gray-200 transition-opacity duration-200 ${
+            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
+          }`}>
             <label className="flex items-center space-x-3 cursor-pointer">
               <input
                 id="forceFresh"
@@ -201,27 +309,42 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
                 checked={forceFresh}
                 onChange={(e) => setForceFresh(e.target.checked)}
                 className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded transition-colors"
-                disabled={isLoading}
+                disabled={isLoading || smartQuery.trim() !== ''}
               />
               <span className="text-sm text-gray-600 font-medium">Force fresh fetch (bypass cache)</span>
             </label>
+          </div>
 
+          <div className="flex justify-end pt-4">
             <button
               type="submit"
-              disabled={isLoading || !isFormValid}
+              disabled={isLoading || isParsingQuery || !isFormValid}
               className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
             >
-              {isLoading ? (
+              {isParsingQuery ? (
+                <div className="flex items-center">
+                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
+                  AI parsing query...
+                </div>
+              ) : isLoading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
                   Searching for leads...
                 </div>
               ) : (
                 <div className="flex items-center">
-                  <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                    <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                  </svg>
-                  Search for Leads
+                  {smartQuery.trim() ? (
+                    <>
+                      AI Smart Search
+                    </>
+                  ) : (
+                    <>
+                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
+                      </svg>
+                      Search for Leads
+                    </>
+                  )}
                 </div>
               )}
             </button>

@@ -36,6 +36,18 @@ export interface ContactResponse {
   user: { email: string; name: string };
 }
 
+export interface ParseQueryResponse {
+  searchParams: {
+    location: string;
+    industry: string;
+    companyType: string;
+    facilityType: string;
+    keywords: string;
+  };
+  confidence: number;
+  reasoning: string;
+}
+
 // Generic API request handler with error handling
 async function apiRequest<T>(
   url: string,
@@ -104,6 +116,12 @@ export const search = {
     return apiRequest<SearchResponse>('/api/search', {
       method: 'POST',
       body: JSON.stringify({ query, forceFresh }),
+    });
+  },
+  async parseQuery(query: string): Promise<ApiResponse<ParseQueryResponse>> {
+    return apiRequest<ParseQueryResponse>('/api/parse-query', {
+      method: 'POST',
+      body: JSON.stringify({ query }),
     });
   },
 };
