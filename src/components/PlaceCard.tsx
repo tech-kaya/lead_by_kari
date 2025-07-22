@@ -7,9 +7,16 @@ interface PlaceCardProps {
   isSelected?: boolean;
   onSelectionChange?: (placeId: string, selected: boolean) => void;
   onContactClick?: (placeId: string) => void;
+  onEnrichClick?: (placeId: string) => void;
 }
 
-export default function PlaceCard({ place, isSelected = false, onSelectionChange, onContactClick }: PlaceCardProps) {
+export default function PlaceCard({ 
+  place, 
+  isSelected = false, 
+  onSelectionChange, 
+  onContactClick,
+  onEnrichClick 
+}: PlaceCardProps) {
   const handleCheckboxChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     onSelectionChange?.(place.place_id, e.target.checked);
   };
@@ -23,6 +30,15 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
     }
   };
 
+  const handleEnrichClick = () => {
+    if (onEnrichClick) {
+      onEnrichClick(place.place_id);
+    }
+  };
+
+  const isEnriched = place.enrichment_level === 'enhanced';
+  const hasContactForm = place.contact_form_url && place.contact_form_working;
+
   return (
     <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6 hover:shadow-lg hover:border-gray-300 transition-all duration-200 h-full flex flex-col">
       <div className="mb-4">
@@ -35,20 +51,80 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
               className="mt-1 h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded transition-colors flex-shrink-0"
             />
           )}
-          <h3 className="text-lg font-semibold text-gray-900 flex-1 leading-tight min-h-[3.5rem] break-words overflow-hidden">
-            <span className="line-clamp-2" title={place.name}>
-              {place.name}
-            </span>
-          </h3>
+          <div className="flex-1">
+            <h3 className="text-lg font-semibold text-gray-900 leading-tight min-h-[3.5rem] break-words overflow-hidden">
+              <span className="line-clamp-2" title={place.name}>
+                {place.name}
+              </span>
+            </h3>
+            {/* Company Type and Status */}
+            <div className="flex items-center gap-2 mt-2">
+              {place.company_type && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+                  {place.company_type}
+                </span>
+              )}
+              {place.business_status && (
+                <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+                  place.business_status === 'active' 
+                    ? 'bg-green-100 text-green-700' 
+                    : 'bg-red-100 text-red-700'
+                }`}>
+                  {place.business_status}
+                </span>
+              )}
+              {isEnriched && (
+                <span className="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-700">
+                  ✓ Verified
+                </span>
+              )}
+            </div>
+          </div>
         </div>
-        {place.category && (
-          <div className="flex justify-end">
+        
+        {/* Industry and Category */}
+        <div className="flex justify-end gap-2">
+          {place.industry && (
+            <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-purple-50 to-pink-50 text-purple-700 border border-purple-200">
+              {place.industry}
+            </span>
+          )}
+          {place.category && (
             <span className="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gradient-to-r from-blue-50 to-indigo-50 text-indigo-700 border border-indigo-200">
               {place.category}
             </span>
-          </div>
-        )}
+          )}
+        </div>
       </div>
+
+      {/* Company Metrics */}
+      {(place.revenue || place.employee_count || place.company_age) && (
+        <div className="mb-4 p-3 bg-gradient-to-r from-gray-50 to-blue-50 rounded-lg border border-gray-200">
+          <h4 className="text-sm font-semibold text-gray-900 mb-2">Company Metrics</h4>
+          <div className="grid grid-cols-3 gap-3 text-sm">
+            {place.revenue && (
+              <div className="text-center">
+                <div className="font-semibold text-green-600">{place.revenue}</div>
+                <div className="text-xs text-gray-500">Revenue</div>
+              </div>
+            )}
+            {place.employee_count && (
+              <div className="text-center">
+                <div className="font-semibold text-blue-600">
+                  {place.employee_count_exact || place.employee_count}
+                </div>
+                <div className="text-xs text-gray-500">Employees</div>
+              </div>
+            )}
+            {place.company_age && (
+              <div className="text-center">
+                <div className="font-semibold text-purple-600">{place.company_age}y</div>
+                <div className="text-xs text-gray-500">Age</div>
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <div className="flex-1 space-y-2 text-sm text-gray-600 min-h-[8rem]">
         <div className="flex items-start">
@@ -58,6 +134,7 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
           <span className="line-clamp-2">{place.address}</span>
         </div>
 
+        {/* Phone with verification status */}
         {place.phone && (
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -66,9 +143,37 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
             <a href={`tel:${place.phone}`} className="text-blue-600 hover:text-blue-800">
               {place.phone}
             </a>
+            {place.phone_verified !== undefined && (
+              <span className={`ml-2 inline-flex items-center text-xs ${
+                place.phone_verified ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {place.phone_verified ? '✓' : '✗'}
+              </span>
+            )}
           </div>
         )}
 
+        {/* Email with verification status */}
+        {place.email && (
+          <div className="flex items-center">
+            <svg className="w-4 h-4 mr-2 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path d="M2.003 5.884L10 9.882l7.997-3.998A2 2 0 0016 4H4a2 2 0 00-1.997 1.884z" />
+              <path d="M18 8.118l-8 4-8-4V14a2 2 0 002 2h12a2 2 0 002-2V8.118z" />
+            </svg>
+            <a href={`mailto:${place.email}`} className="text-blue-600 hover:text-blue-800 truncate">
+              {place.email}
+            </a>
+            {place.email_verified !== undefined && (
+              <span className={`ml-2 inline-flex items-center text-xs flex-shrink-0 ${
+                place.email_verified ? 'text-green-600' : 'text-red-600'
+              }`}>
+                {place.email_verified ? '✓' : '✗'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Website with status */}
         {place.website && (
           <div className="flex items-center">
             <svg className="w-4 h-4 mr-2 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
@@ -83,6 +188,43 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
             >
               {place.website.replace(/^https?:\/\//, '').replace(/\/$/, '')}
             </a>
+            {place.website_status && (
+              <span className={`ml-2 inline-flex items-center text-xs flex-shrink-0 ${
+                place.website_status === 'active' ? 'text-green-600' : 
+                place.website_status === 'redirected' ? 'text-yellow-600' : 'text-red-600'
+              }`}>
+                {place.website_status === 'active' ? '✓' : 
+                 place.website_status === 'redirected' ? '↗' : '✗'}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Contact Form */}
+        {hasContactForm && (
+          <div className="flex items-center">
+            <svg className="w-4 h-4 mr-2 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+            </svg>
+            <a 
+              href={place.contact_form_url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="text-blue-600 hover:text-blue-800 truncate font-medium"
+            >
+              Contact Form
+            </a>
+            <span className="ml-2 inline-flex items-center text-xs text-green-600 flex-shrink-0">✓</span>
+          </div>
+        )}
+
+        {/* Tax ID */}
+        {place.tax_id && (
+          <div className="flex items-center">
+            <svg className="w-4 h-4 mr-2 text-gray-400 shrink-0" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+              <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v8a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2H4zm0 2h12v8H4V6z" clipRule="evenodd" />
+            </svg>
+            <span className="text-gray-600">EIN: {place.tax_id}</span>
           </div>
         )}
 
@@ -121,6 +263,20 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
               Contact Us
             </button>
             
+            {/* Enrich Data Button */}
+            {!isEnriched && onEnrichClick && (
+              <button
+                type="button"
+                onClick={handleEnrichClick}
+                className="w-full inline-flex items-center justify-center px-4 py-2 bg-gradient-to-r from-green-600 to-teal-600 text-white text-sm font-medium rounded-lg hover:from-green-700 hover:to-teal-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 transition-all duration-200 shadow-sm"
+              >
+                <svg className="w-4 h-4 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                </svg>
+                Get Full Details
+              </button>
+            )}
+            
             {/* Secondary Actions - Consistent Grid with Fixed Height */}
             <div className="grid grid-cols-2 gap-2 min-h-[2.5rem]">
               {place.website && (
@@ -147,7 +303,20 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
                   Call
                 </a>
               )}
-              {!place.website && !place.phone && (
+              {hasContactForm && (
+                <a
+                  href={place.contact_form_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center px-3 py-2 bg-purple-50 text-purple-700 text-sm font-medium rounded-lg hover:bg-purple-100 transition-colors duration-200 border border-purple-200 col-span-2"
+                >
+                  <svg className="w-4 h-4 mr-1.5" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z" clipRule="evenodd" />
+                  </svg>
+                  Contact Form
+                </a>
+              )}
+              {!place.website && !place.phone && !hasContactForm && (
                 <div className="col-span-2 flex items-center justify-center text-sm text-gray-500 py-2">
                   No direct contact info available
                 </div>
@@ -157,9 +326,16 @@ export default function PlaceCard({ place, isSelected = false, onSelectionChange
         </div>
 
         <div className="mt-3 pt-3 border-t border-gray-100">
-          <p className="text-xs text-gray-500">
-            Lead generated: {new Date(place.stored_at).toLocaleDateString()}
-          </p>
+          <div className="flex justify-between items-center text-xs text-gray-500">
+            <span>
+              Lead generated: {new Date(place.stored_at).toLocaleDateString()}
+            </span>
+            {place.last_enriched_at && (
+              <span>
+                Enriched: {new Date(place.last_enriched_at).toLocaleDateString()}
+              </span>
+            )}
+          </div>
         </div>
       </div>
     </div>

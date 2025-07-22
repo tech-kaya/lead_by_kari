@@ -44,14 +44,14 @@ export default function DashboardPage() {
     return parts.join(' ') || searchParams.location || 'businesses';
   };
 
-  const handleSearch = async (searchParams: SearchParams, forceFresh: boolean) => {
+  const handleSearch = async (searchParams: SearchParams, forceFresh: boolean, maxResults?: number) => {
     setIsLoading(true);
     setError(null);
     setWarning(null);
     
     try {
       const query = buildSearchQuery(searchParams);
-      const response = await search.places(query, forceFresh);
+      const response = await search.places(query, forceFresh, maxResults);
       
       if (response.error) {
         if (response.error.includes('Authentication required')) {

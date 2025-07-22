@@ -112,10 +112,10 @@ export const auth = {
 
 // Search API calls
 export const search = {
-  async places(query: string, forceFresh = false): Promise<ApiResponse<SearchResponse>> {
+  async places(query: string, forceFresh = false, maxResults?: number): Promise<ApiResponse<SearchResponse>> {
     return apiRequest<SearchResponse>('/api/search', {
       method: 'POST',
-      body: JSON.stringify({ query, forceFresh }),
+      body: JSON.stringify({ query, forceFresh, maxResults }),
     });
   },
   async parseQuery(query: string): Promise<ApiResponse<ParseQueryResponse>> {

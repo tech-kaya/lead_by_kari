@@ -4,7 +4,7 @@ import { useState } from 'react';
 import { search } from '@/lib/api';
 
 interface SearchFormProps {
-  onSearch: (searchParams: SearchParams, forceFresh: boolean) => void;
+  onSearch: (searchParams: SearchParams, forceFresh: boolean, maxResults?: number) => void;
   isLoading: boolean;
 }
 
@@ -17,55 +17,27 @@ export interface SearchParams {
 }
 
 export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
-  const [searchParams, setSearchParams] = useState<SearchParams>({
-    location: '',
-    industry: '',
-    companyType: '',
-    facilityType: '',
-    keywords: ''
-  });
-  const [forceFresh, setForceFresh] = useState(false);
   const [smartQuery, setSmartQuery] = useState('');
+  const [maxResults, setMaxResults] = useState(20);
   const [isParsingQuery, setIsParsingQuery] = useState(false);
-
-  const handleInputChange = (field: keyof SearchParams, value: string) => {
-    setSearchParams(prev => ({ ...prev, [field]: value }));
-  };
 
   const handleSmartQueryChange = (value: string) => {
     setSmartQuery(value);
-    // Clear manual form fields when smart query is entered
-    if (value.trim()) {
-      setSearchParams({
-        location: '',
-        industry: '',
-        companyType: '',
-        facilityType: '',
-        keywords: ''
-      });
-    }
   };
 
   const clearSmartQuery = () => {
     setSmartQuery('');
   };
 
-  const buildSearchQuery = (params: SearchParams): string => {
-    const parts = [];
-    
-    if (params.industry) parts.push(params.industry);
-    if (params.companyType) parts.push(params.companyType);
-    if (params.facilityType) parts.push(params.facilityType);
-    if (params.keywords) parts.push(params.keywords);
-    if (params.location) parts.push(`in ${params.location}`);
-    
-    return parts.join(' ') || params.location || 'businesses';
+  const handleMaxResultsChange = (value: number) => {
+    // Ensure value is between 1 and 60
+    const clampedValue = Math.min(Math.max(value, 1), 60);
+    setMaxResults(clampedValue);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     
-    // If there's a smart query, parse it first, then search
     if (smartQuery.trim()) {
       setIsParsingQuery(true);
       
@@ -80,8 +52,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         }
         
         if (response.data) {
-          // Use parsed parameters for search
-          onSearch(response.data.searchParams, forceFresh);
+          // Use parsed parameters for search with specified max results
+          onSearch(response.data.searchParams, false, maxResults);
         }
       } catch (error) {
         console.error('Parse query error:', error);
@@ -89,267 +61,167 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
       } finally {
         setIsParsingQuery(false);
       }
-    } else {
-      // Use manual form parameters
-      const query = buildSearchQuery(searchParams);
-      if (query.trim()) {
-        onSearch(searchParams, forceFresh);
-      }
     }
   };
 
-  const isFormValid = smartQuery.trim() || 
-                      searchParams.location.trim() || searchParams.industry.trim() || 
-                      searchParams.companyType.trim() || searchParams.facilityType.trim() || 
-                      searchParams.keywords.trim();
+  const isFormValid = smartQuery.trim();
 
   return (
-    <div className="w-full max-w-6xl mx-auto">
+    <div className="w-full max-w-4xl mx-auto">
       <div className="bg-gradient-to-br from-white to-blue-50 rounded-2xl shadow-xl border border-gray-200 p-8">
         <div className="text-center mb-8">
-          <h2 className="text-2xl font-bold text-gray-900 mb-2">Find Your Perfect Business Leads</h2>
-          <p className="text-gray-600">Use our advanced filters to discover high-quality prospects in your target market</p>
+          <h2 className="text-2xl font-bold text-gray-900 mb-2">AI-Powered Lead Generation</h2>
+          <p className="text-gray-600">Describe what you&apos;re looking for in natural language, and our AI will find the perfect business leads</p>
         </div>
 
-        {/* Smart Query Section */}
-        <div className="mb-8 p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
-          <div className="flex items-center mb-4">
-            <h3 className="text-lg font-semibold text-purple-900">AI Smart Search</h3>
-          </div>
-          
-          <p className="text-sm text-purple-700 mb-4">
-            Describe what you&apos;re looking for in natural language, and our AI will automatically parse your query and search for leads!
-          </p>
-          
-                      <div className="flex flex-col space-y-4">
-            <div className="flex flex-col space-y-2">
-              <div className="flex items-center justify-between">
-                <label htmlFor="smartQuery" className="text-sm font-medium text-purple-800">
-                  Natural Language Query
-                </label>
-                {smartQuery && (
-                  <button
-                    type="button"
-                    onClick={clearSmartQuery}
-                    disabled={isLoading || isParsingQuery}
-                    className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50"
-                  >
-                    Clear
-                  </button>
-                )}
-              </div>
-              <textarea
-                id="smartQuery"
-                value={smartQuery}
-                onChange={(e) => handleSmartQueryChange(e.target.value)}
-                placeholder="e.g., 'small tech companies in London' or 'restaurants and cafes in New York City' or 'healthcare startups in San Francisco'"
-                className="w-full text-black px-4 py-3 bg-white border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all duration-200 shadow-sm hover:border-purple-300 resize-none"
-                rows={3}
-                disabled={isLoading || isParsingQuery}
-                maxLength={500}
-              />
-              <div className="text-xs text-purple-600">
-                {smartQuery.length}/500 characters
-              </div>
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="p-6 bg-gradient-to-r from-purple-50 to-indigo-50 rounded-xl border border-purple-200">
+            <div className="flex items-center mb-4">
+              <svg className="w-6 h-6 mr-3 text-purple-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                <path fillRule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clipRule="evenodd" />
+              </svg>
+              <h3 className="text-lg font-semibold text-purple-900">AI Smart Search</h3>
             </div>
             
-
-          </div>
-        </div>
-
-        <form onSubmit={handleSubmit} className="space-y-8">
-          <div className="flex items-center justify-center py-4">
-            <div className="flex-1 border-t border-gray-300" />
-            <div className="px-4 text-sm text-gray-500 font-medium">OR use manual filters below</div>
-            <div className="flex-1 border-t border-gray-300" />
-          </div>
-          
-          <div className={`grid grid-cols-1 lg:grid-cols-2 gap-6 transition-opacity duration-200 ${
-            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
-          }`}>
-            {/* Location */}
-            <div className="flex flex-col space-y-3">
-              <label htmlFor="location" className="text-sm font-semibold text-gray-800 flex items-center">
-                <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M5.05 4.05a7 7 0 119.9 9.9L10 18.9l-4.95-4.95a7 7 0 010-9.9zM10 11a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" />
-                </svg>
-                Location *
-              </label>
-              <input
-                id="location"
-                type="text"
-                value={searchParams.location}
-                onChange={(e) => handleInputChange('location', e.target.value)}
-                placeholder="City, state, ZIP code, or region..."
-                className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading || smartQuery.trim() !== ''}
-              />
-            </div>
-
-            {/* Industry */}
-            <div className="flex flex-col space-y-3">
-              <label htmlFor="industry" className="text-sm font-semibold text-gray-800 flex items-center">
-                <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M6 6V5a3 3 0 013-3h2a3 3 0 013 3v1h2a2 2 0 012 2v3.57A22.952 22.952 0 0110 13a22.95 22.95 0 01-8-1.43V8a2 2 0 012-2h2zm2-1a1 1 0 011-1h2a1 1 0 011 1v1H8V5zm1 5a1 1 0 011-1h.01a1 1 0 110 2H10a1 1 0 01-1-1z" clipRule="evenodd" />
-                  <path d="M2 13.692V16a2 2 0 002 2h12a2 2 0 002-2v-2.308A24.974 24.974 0 0110 15c-2.796 0-5.487-.46-8-1.308z" />
-                </svg>
-                Industry
-              </label>
-              <select
-                id="industry"
-                value={searchParams.industry}
-                onChange={(e) => handleInputChange('industry', e.target.value)}
-                className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading || smartQuery.trim() !== ''}
-              >
-                <option value="">Select industry...</option>
-                <option value="restaurant">Restaurants & Food Service</option>
-                <option value="retail">Retail & Shopping</option>
-                <option value="healthcare">Healthcare & Medical</option>
-                <option value="automotive">Automotive</option>
-                <option value="real estate">Real Estate</option>
-                <option value="technology">Technology</option>
-                <option value="construction">Construction</option>
-                <option value="manufacturing">Manufacturing</option>
-                <option value="finance">Finance & Banking</option>
-                <option value="education">Education</option>
-                <option value="hospitality">Hotels & Hospitality</option>
-                <option value="fitness">Fitness & Wellness</option>
-                <option value="beauty">Beauty & Personal Care</option>
-                <option value="legal">Legal Services</option>
-                <option value="consulting">Consulting</option>
-              </select>
-            </div>
-
-            {/* Company Type */}
-            <div className="flex flex-col space-y-3">
-              <label htmlFor="companyType" className="text-sm font-semibold text-gray-800 flex items-center">
-                <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M4 4a2 2 0 012-2h8a2 2 0 012 2v12a1 1 0 110 2h-3a1 1 0 01-1-1v-2a1 1 0 00-1-1H9a1 1 0 00-1 1v2a1 1 0 01-1 1H4a1 1 0 110-2V4zm3 1h2v2H7V5zm2 4H7v2h2V9zm2-4h2v2h-2V5zm2 4h-2v2h2V9z" clipRule="evenodd" />
-                </svg>
-                Company Type
-              </label>
-              <select
-                id="companyType"
-                value={searchParams.companyType}
-                onChange={(e) => handleInputChange('companyType', e.target.value)}
-                className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading || smartQuery.trim() !== ''}
-              >
-                <option value="">Select company type...</option>
-                <option value="small business">Small Business</option>
-                <option value="startup">Startup</option>
-                <option value="corporation">Corporation</option>
-                <option value="franchise">Franchise</option>
-                <option value="chain">Chain Store</option>
-                <option value="local business">Local Business</option>
-                <option value="enterprise">Enterprise</option>
-                <option value="nonprofit">Non-Profit</option>
-              </select>
-            </div>
-
-            {/* Facility Type */}
-            <div className="flex flex-col space-y-3">
-              <label htmlFor="facilityType" className="text-sm font-semibold text-gray-800 flex items-center">
-                <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M10.496 2.132a1 1 0 00-.992 0l-7 4A1 1 0 003 8v7a3 3 0 003 3h4a3 3 0 003-3h1a3 3 0 003-3V8a1 1 0 00.496-1.868l-7-4zM6 9a1 1 0 000 2h2a1 1 0 100-2H6z" clipRule="evenodd" />
-                </svg>
-                Facility Type
-              </label>
-              <select
-                id="facilityType"
-                value={searchParams.facilityType}
-                onChange={(e) => handleInputChange('facilityType', e.target.value)}
-                className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-                disabled={isLoading || smartQuery.trim() !== ''}
-              >
-                <option value="">Select facility type...</option>
-                <option value="office">Office Building</option>
-                <option value="storefront">Storefront</option>
-                <option value="warehouse">Warehouse</option>
-                <option value="factory">Factory</option>
-                <option value="clinic">Clinic</option>
-                <option value="shop">Shop</option>
-                <option value="center">Center</option>
-                <option value="plaza">Plaza</option>
-                <option value="mall">Mall</option>
-                <option value="complex">Complex</option>
-              </select>
+            <p className="text-sm text-purple-700 mb-4">
+              Simply describe the type of businesses you want to find. Our AI will understand your intent and search for comprehensive company data including contact information, revenue, employee count, and more!
+            </p>
+            
+            <div className="flex flex-col space-y-4">
+              <div className="flex flex-col space-y-2">
+                <div className="flex items-center justify-between">
+                  <label htmlFor="smartQuery" className="text-sm font-medium text-purple-800">
+                    What type of businesses are you looking for?
+                  </label>
+                  {smartQuery && (
+                    <button
+                      type="button"
+                      onClick={clearSmartQuery}
+                      disabled={isLoading || isParsingQuery}
+                      className="text-xs text-purple-600 hover:text-purple-800 font-medium disabled:opacity-50 transition-colors"
+                    >
+                      Clear
+                    </button>
+                  )}
+                </div>
+                <textarea
+                  id="smartQuery"
+                  value={smartQuery}
+                  onChange={(e) => handleSmartQueryChange(e.target.value)}
+                  placeholder="Examples:
+• 'Small tech companies in San Francisco'
+• 'Restaurants and cafes in New York City'
+• 'Healthcare startups with 10-50 employees'
+• 'Manufacturing companies in Texas'
+• 'Real estate agencies in Miami'
+• 'Retail stores in downtown Chicago'"
+                  className="w-full text-black px-4 py-4 bg-white border-2 border-purple-200 rounded-lg focus:ring-2 focus:ring-purple-500 focus:border-purple-500 outline-none transition-all duration-200 shadow-sm hover:border-purple-300 resize-none text-base"
+                  rows={6}
+                  disabled={isLoading || isParsingQuery}
+                  maxLength={500}
+                />
+                <div className="flex justify-between items-center">
+                  <div className="text-xs text-purple-600">
+                    {smartQuery.length}/500 characters
+                  </div>
+                  <div className="text-xs text-purple-600">
+                    💡 Be as specific as possible for better results
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
-          {/* Keywords */}
-          <div className={`flex flex-col space-y-3 transition-opacity duration-200 ${
-            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
-          }`}>
-            <label htmlFor="keywords" className="text-sm font-semibold text-gray-800 flex items-center">
-              <svg className="w-4 h-4 mr-2 text-indigo-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-              </svg>
-              Additional Keywords
-            </label>
-            <input
-              id="keywords"
-              type="text"
-              value={searchParams.keywords}
-              onChange={(e) => handleInputChange('keywords', e.target.value)}
-              placeholder="Specific business names, services, or additional search terms..."
-              className="w-full text-gray-900 px-4 py-4 bg-white border-2 border-gray-200 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 outline-none transition-all duration-200 shadow-sm hover:border-gray-300"
-              disabled={isLoading || smartQuery.trim() !== ''}
-            />
+          {/* Number of Results */}
+          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center space-x-3">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                </svg>
+                <label htmlFor="maxResults" className="text-sm font-medium text-blue-800">
+                  Number of leads to find:
+                </label>
+              </div>
+              <div className="flex items-center space-x-3">
+                <input
+                  id="maxResults"
+                  type="number"
+                  min="1"
+                  max="60"
+                  value={maxResults}
+                  onChange={(e) => handleMaxResultsChange(Number.parseInt(e.target.value) || 1)}
+                  className="w-20 px-3 py-2 bg-white border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 text-center font-semibold text-blue-900"
+                  disabled={isLoading || isParsingQuery}
+                />
+                <span className="text-sm text-blue-600 font-medium">leads</span>
+              </div>
+            </div>
+            <div className="mt-2 text-xs text-blue-600">
+              Choose between 1-60 leads. More leads = more comprehensive market coverage but longer search time.
+            </div>
           </div>
 
-          <div className={`pt-4 border-t border-gray-200 transition-opacity duration-200 ${
-            smartQuery.trim() !== '' ? 'opacity-50' : 'opacity-100'
-          }`}>
-            <label className="flex items-center space-x-3 cursor-pointer">
-              <input
-                id="forceFresh"
-                type="checkbox"
-                checked={forceFresh}
-                onChange={(e) => setForceFresh(e.target.checked)}
-                className="h-5 w-5 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded transition-colors"
-                disabled={isLoading || smartQuery.trim() !== ''}
-              />
-              <span className="text-sm text-gray-600 font-medium">Force fresh fetch (bypass cache)</span>
-            </label>
-          </div>
-
-          <div className="flex justify-end pt-4">
+          <div className="flex justify-center pt-4">
             <button
               type="submit"
               disabled={isLoading || isParsingQuery || !isFormValid}
-              className="px-8 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5"
+              className="px-10 py-4 bg-gradient-to-r from-indigo-600 to-purple-600 text-white font-semibold rounded-xl hover:from-indigo-700 hover:to-purple-700 focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200 shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 text-lg"
             >
               {isParsingQuery ? (
                 <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
-                  AI parsing query...
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3" />
+                  AI is analyzing your request...
                 </div>
               ) : isLoading ? (
                 <div className="flex items-center">
-                  <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-3" />
-                  Searching for leads...
+                  <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3" />
+                  Finding {maxResults} comprehensive leads...
                 </div>
               ) : (
                 <div className="flex items-center">
-                  {smartQuery.trim() ? (
-                    <>
-                      AI Smart Search
-                    </>
-                  ) : (
-                    <>
-                      <svg className="w-5 h-5 mr-2" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                        <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" />
-                      </svg>
-                      Search for Leads
-                    </>
-                  )}
+                  <svg className="w-6 h-6 mr-3" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fillRule="evenodd" d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" clipRule="evenodd" />
+                  </svg>
+                  Find {maxResults} Leads with AI
                 </div>
               )}
             </button>
           </div>
         </form>
+
+        {/* Feature highlights */}
+        <div className="mt-8 pt-6 border-t border-gray-200">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-center">
+            <div className="flex flex-col items-center space-y-2">
+              <div className="w-10 h-10 bg-green-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-sm font-medium text-gray-900">Comprehensive Data</div>
+              <div className="text-xs text-gray-600">Contact info, revenue, employees, verification</div>
+            </div>
+            <div className="flex flex-col items-center space-y-2">
+              <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-sm font-medium text-gray-900">Real-time Results</div>
+              <div className="text-xs text-gray-600">Fresh data from multiple verified sources</div>
+            </div>
+            <div className="flex flex-col items-center space-y-2">
+              <div className="w-10 h-10 bg-purple-100 rounded-full flex items-center justify-center">
+                <svg className="w-5 h-5 text-purple-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                  <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <div className="text-sm font-medium text-gray-900">Export Ready</div>
+              <div className="text-xs text-gray-600">Download in CSV or Excel format</div>
+            </div>
+          </div>
+        </div>
       </div>
     </div>
   );
