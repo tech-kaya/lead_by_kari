@@ -226,12 +226,121 @@ function generateSearchVariations(query: string): string[] {
   return variations;
 }
 
-// Search a single query with pagination
-async function searchSingleQuery(query: string, apiKey: string): Promise<GooglePlace[]> {
+
+
+// Search Google Places API
+export async function searchGooglePlaces(query: string, maxResults?: number): Promise<GooglePlace[]> {
+  const apiKey = 'AIzaSyBGO5ewIPuY_tJfFaK5NwXaRhEYHrEJw0U';
+  
+  if (!apiKey) {
+    throw new Error('Google Places API key not configured');
+  }
+
+  const searchPlaces = async (): Promise<GooglePlace[]> => {
+    // Generate search variations to get more comprehensive results
+    const searchVariations = generateSearchVariations(query);
+    console.log(`Searching with ${searchVariations.length} variations:`, searchVariations);
+    
+    let allResults: GooglePlace[] = [];
+    const seenPlaceIds = new Set<string>();
+    const targetResults = maxResults || 60; // Default to 60 if no limit specified
+    
+    // Search each variation but stop when we have enough results
+    for (let i = 0; i < searchVariations.length && allResults.length < targetResults; i++) {
+      const searchQuery = searchVariations[i];
+      console.log(`\n--- Searching variation ${i + 1}/${searchVariations.length}: "${searchQuery}" ---`);
+      
+      try {
+        // Calculate how many more results we need
+        const remainingNeeded = targetResults - allResults.length;
+        const variationResults = await searchSingleQueryLimited(searchQuery, apiKey, remainingNeeded);
+        
+        // Filter out duplicates based on place_id
+        const newResults = variationResults.filter(place => {
+          if (seenPlaceIds.has(place.place_id)) {
+            return false;
+          }
+          seenPlaceIds.add(place.place_id);
+          return true;
+        });
+        
+        allResults = allResults.concat(newResults);
+        console.log(`Added ${newResults.length} new unique results. Total unique: ${allResults.length}`);
+        
+        // Stop if we have enough results
+        if (allResults.length >= targetResults) {
+          console.log(`Reached target of ${targetResults} results, stopping search variations.`);
+          break;
+        }
+        
+        // Small delay between different search variations
+        if (i < searchVariations.length - 1) {
+          await delay(500);
+        }
+        
+      } catch (error) {
+        console.warn(`Failed to search variation "${searchQuery}":`, error);
+        // Continue to next variation
+      }
+    }
+    
+    // Trim to exact maxResults if specified
+    const finalResults = maxResults ? allResults.slice(0, maxResults) : allResults;
+    console.log(`\nTotal unique places fetched: ${finalResults.length}`);
+    
+    // Enhance each result with detailed information including website
+    // Process in batches to avoid overwhelming the API
+    const batchSize = 10;
+    const enhancedResults: GooglePlace[] = [];
+    
+    for (let i = 0; i < finalResults.length; i += batchSize) {
+      const batch = finalResults.slice(i, i + batchSize);
+      console.log(`Enhancing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(finalResults.length / batchSize)} (${batch.length} places)`);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (place: GooglePlace) => {
+          try {
+            const details = await getPlaceDetails(place.place_id);
+            return {
+              ...place,
+              ...details,
+              // Ensure we have the website from details
+              website: details.website || place.website,
+              formatted_phone_number: details.formatted_phone_number || place.formatted_phone_number
+            };
+          } catch (error) {
+            console.warn(`Failed to get details for place ${place.place_id}:`, error);
+            return place; // Return basic place info if details fail
+          }
+        })
+      );
+      
+      enhancedResults.push(...batchResults);
+      
+      // Small delay between batches to be respectful to the API
+      if (i + batchSize < finalResults.length) {
+        await delay(250);
+      }
+    }
+    
+    console.log(`Returning ${enhancedResults.length} enhanced results`);
+    return enhancedResults;
+  };
+
+  try {
+    return await retryWithBackoff(searchPlaces);
+  } catch (error) {
+    console.error('Failed to search Google Places after retries:', error);
+    throw error;
+  }
+}
+
+// Search a single query with limited results
+async function searchSingleQueryLimited(query: string, apiKey: string, maxResults: number): Promise<GooglePlace[]> {
   let allResults: GooglePlace[] = [];
   let nextPageToken: string | undefined;
   let pageCount = 0;
-  const maxPages = 3; // Google Places allows up to 3 pages (60 results total)
+  const maxPages = Math.ceil(maxResults / 20); // Each page has ~20 results
   
   do {
     // Build URL with pagination token if available
@@ -265,117 +374,22 @@ async function searchSingleQuery(query: string, apiKey: string): Promise<GoogleP
     pageCount++;
     
     console.log(`Query "${query}" - Page ${pageCount}: ${pageResults.length} results. Total: ${allResults.length}`);
-    console.log(`Next page token: ${nextPageToken ? 'Available' : 'None'}`);
+    
+    // Stop if we have enough results or reached max pages
+    if (allResults.length >= maxResults || pageCount >= maxPages) {
+      console.log(`Stopping search - have ${allResults.length} results (target: ${maxResults})`);
+      break;
+    }
     
     // If there's a next page token, wait a bit before the next request
-    // Google requires a short delay before using the next page token
-    if (nextPageToken && pageCount < maxPages) {
+    if (nextPageToken) {
       console.log(`Waiting 2 seconds before fetching page ${pageCount + 1}...`);
       await delay(2000);
     }
     
-  } while (nextPageToken && pageCount < maxPages);
+  } while (nextPageToken && pageCount < maxPages && allResults.length < maxResults);
   
-  return allResults;
-}
-
-// Search Google Places API
-export async function searchGooglePlaces(query: string, maxResults?: number): Promise<GooglePlace[]> {
-  const apiKey = 'AIzaSyBGO5ewIPuY_tJfFaK5NwXaRhEYHrEJw0U';
-  
-  if (!apiKey) {
-    throw new Error('Google Places API key not configured');
-  }
-
-  const searchPlaces = async (): Promise<GooglePlace[]> => {
-    // Generate search variations to get more comprehensive results
-    const searchVariations = generateSearchVariations(query);
-    console.log(`Searching with ${searchVariations.length} variations:`, searchVariations);
-    
-    let allResults: GooglePlace[] = [];
-    const seenPlaceIds = new Set<string>();
-    
-    // Search each variation
-    for (let i = 0; i < searchVariations.length; i++) {
-      const searchQuery = searchVariations[i];
-      console.log(`\n--- Searching variation ${i + 1}/${searchVariations.length}: "${searchQuery}" ---`);
-      
-      try {
-        const variationResults = await searchSingleQuery(searchQuery, apiKey);
-        
-        // Filter out duplicates based on place_id
-        const newResults = variationResults.filter(place => {
-          if (seenPlaceIds.has(place.place_id)) {
-            return false;
-          }
-          seenPlaceIds.add(place.place_id);
-          return true;
-        });
-        
-        allResults = allResults.concat(newResults);
-        console.log(`Added ${newResults.length} new unique results. Total unique: ${allResults.length}`);
-        
-        // Small delay between different search variations
-        if (i < searchVariations.length - 1) {
-          await delay(500);
-        }
-        
-             } catch (error) {
-         console.warn(`Failed to search variation "${searchQuery}":`, error);
-         // Continue to next variation
-       }
-    }
-    
-    console.log(`\nTotal unique places fetched from all variations: ${allResults.length}`);
-    
-    // Enhance each result with detailed information including website
-    // Process in batches to avoid overwhelming the API
-    const batchSize = 10;
-    const enhancedResults: GooglePlace[] = [];
-    
-    for (let i = 0; i < allResults.length; i += batchSize) {
-      const batch = allResults.slice(i, i + batchSize);
-      console.log(`Enhancing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(allResults.length / batchSize)} (${batch.length} places)`);
-      
-      const batchResults = await Promise.all(
-        batch.map(async (place: GooglePlace) => {
-          try {
-            const details = await getPlaceDetails(place.place_id);
-            return {
-              ...place,
-              ...details,
-              // Ensure we have the website from details
-              website: details.website || place.website,
-              formatted_phone_number: details.formatted_phone_number || place.formatted_phone_number
-            };
-          } catch (error) {
-            console.warn(`Failed to get details for place ${place.place_id}:`, error);
-            return place; // Return basic place info if details fail
-          }
-        })
-      );
-      
-      enhancedResults.push(...batchResults);
-      
-      // Small delay between batches to be respectful to the API
-      if (i + batchSize < allResults.length) {
-        await delay(250);
-      }
-    }
-    
-    // Apply maxResults limit if specified
-    const finalResults = maxResults ? enhancedResults.slice(0, maxResults) : enhancedResults;
-    console.log(`Returning ${finalResults.length} results${maxResults ? ` (limited to ${maxResults})` : ''}`);
-    
-    return finalResults;
-  };
-
-  try {
-    return await retryWithBackoff(searchPlaces);
-  } catch (error) {
-    console.error('Failed to search Google Places after retries:', error);
-    throw error;
-  }
+  return allResults.slice(0, maxResults); // Ensure we don't exceed the limit
 }
 
 // Convert Google Place to our Place format
@@ -787,11 +801,11 @@ function determineIndustry(types: string[]): string | undefined {
 export async function searchGooglePlacesEnhanced(query: string, maxResults?: number): Promise<Place[]> {
   console.log('Starting enhanced search with comprehensive data enrichment...');
   
-  // Get basic places from Google Places API
+  // Get basic places from Google Places API (already enhanced with details)
   const googlePlaces = await searchGooglePlaces(query, maxResults);
   console.log(`Found ${googlePlaces.length} places from Google Places API`);
   
-  // Enrich each place with comprehensive data
+  // Convert to Place format and add business enrichment (no double enrichment)
   const enrichedPlaces: Place[] = [];
   
   // Process in smaller batches to avoid overwhelming APIs
