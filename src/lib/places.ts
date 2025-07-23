@@ -237,6 +237,9 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
   }
 
   const searchPlaces = async (): Promise<GooglePlace[]> => {
+    // Detect if we're in production environment for faster processing
+    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+    
     // Generate search variations to get more comprehensive results
     const searchVariations = generateSearchVariations(query);
     console.log(`Searching with ${searchVariations.length} variations:`, searchVariations);
@@ -273,9 +276,10 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
           break;
         }
         
-        // Small delay between different search variations
+        // Small delay between different search variations (shorter in production)
         if (i < searchVariations.length - 1) {
-          await delay(500);
+          const delayTime = isProduction ? 200 : 500; // Faster in production
+          await delay(delayTime);
         }
         
       } catch (error) {
@@ -287,6 +291,16 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
     // Trim to exact maxResults if specified
     const finalResults = maxResults ? allResults.slice(0, maxResults) : allResults;
     console.log(`\nTotal unique places fetched: ${finalResults.length}`);
+    
+    if (isProduction) {
+      // FAST MODE: Skip detailed place enhancement in production
+      console.log('Production mode: Skipping detailed place enhancement for speed');
+      console.log(`Returning ${finalResults.length} basic results for fast processing`);
+      return finalResults;
+    }
+    
+    // DEVELOPMENT MODE: Full place details enhancement
+    console.log('Development mode: Fetching detailed place information');
     
     // Enhance each result with detailed information including website
     // Process in batches to avoid overwhelming the API
@@ -801,46 +815,137 @@ function determineIndustry(types: string[]): string | undefined {
 export async function searchGooglePlacesEnhanced(query: string, maxResults?: number): Promise<Place[]> {
   console.log('Starting enhanced search with comprehensive data enrichment...');
   
+  // Detect if we're in production environment
+  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  const timeLimit = isProduction ? 20000 : 60000; // 20 seconds for production, 60 for development
+  const startTime = Date.now();
+  
+  console.log(`Running in ${isProduction ? 'PRODUCTION' : 'DEVELOPMENT'} mode with ${timeLimit/1000}s time limit`);
+  
   // Get basic places from Google Places API (already enhanced with details)
   const googlePlaces = await searchGooglePlaces(query, maxResults);
   console.log(`Found ${googlePlaces.length} places from Google Places API`);
   
-  // Convert to Place format and add business enrichment (no double enrichment)
+  // Convert to Place format with minimal enrichment for production
   const enrichedPlaces: Place[] = [];
   
-  // Process in smaller batches to avoid overwhelming APIs
-  const batchSize = 5;
-  for (let i = 0; i < googlePlaces.length; i += batchSize) {
-    const batch = googlePlaces.slice(i, i + batchSize);
-    console.log(`Processing enrichment batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(googlePlaces.length / batchSize)}`);
+  if (isProduction) {
+    // FAST MODE: Minimal enrichment for production
+    console.log('Using FAST MODE for production - minimal enrichment');
     
-    const batchResults = await Promise.all(
-      batch.map(async (place) => {
+    const fastResults = await Promise.all(
+      googlePlaces.map(async (place) => {
         try {
-          return await enrichPlaceData(place);
+          return await enrichPlaceDataFast(place);
         } catch (error) {
-          console.error(`Failed to enrich place ${place.name}:`, error);
-          // Return basic place data if enrichment fails
+          console.error(`Failed to fast-enrich place ${place.name}:`, error);
           return {
             ...formatGooglePlace(place),
             id: 0,
             stored_at: new Date(),
-            enrichment_level: 'basic'
+            enrichment_level: 'fast'
           };
         }
       })
     );
     
-    enrichedPlaces.push(...batchResults);
+    enrichedPlaces.push(...fastResults);
     
-    // Small delay between batches to be respectful to APIs
-    if (i + batchSize < googlePlaces.length) {
-      await delay(1000);
+  } else {
+    // COMPREHENSIVE MODE: Full enrichment for development
+    console.log('Using COMPREHENSIVE MODE for development - full enrichment');
+    
+    // Process in smaller batches to avoid overwhelming APIs
+    const batchSize = 5;
+    for (let i = 0; i < googlePlaces.length; i += batchSize) {
+      // Check time limit
+      if (Date.now() - startTime > timeLimit) {
+        console.warn(`Time limit reached, processing remaining ${googlePlaces.length - i} places with fast enrichment`);
+        const remainingPlaces = googlePlaces.slice(i);
+        const fastResults = await Promise.all(
+          remainingPlaces.map(place => enrichPlaceDataFast(place))
+        );
+        enrichedPlaces.push(...fastResults);
+        break;
+      }
+      
+      const batch = googlePlaces.slice(i, i + batchSize);
+      console.log(`Processing enrichment batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(googlePlaces.length / batchSize)}`);
+      
+      const batchResults = await Promise.all(
+        batch.map(async (place) => {
+          try {
+            return await enrichPlaceData(place);
+          } catch (error) {
+            console.error(`Failed to enrich place ${place.name}:`, error);
+            // Return basic place data if enrichment fails
+            return {
+              ...formatGooglePlace(place),
+              id: 0,
+              stored_at: new Date(),
+              enrichment_level: 'basic'
+            };
+          }
+        })
+      );
+      
+      enrichedPlaces.push(...batchResults);
+      
+      // Small delay between batches to be respectful to APIs
+      if (i + batchSize < googlePlaces.length) {
+        await delay(1000);
+      }
     }
   }
   
-  console.log(`Successfully enriched ${enrichedPlaces.length} places with comprehensive data`);
+  const totalTime = Date.now() - startTime;
+  console.log(`Successfully enriched ${enrichedPlaces.length} places in ${totalTime}ms (${(totalTime/1000).toFixed(1)}s)`);
   return enrichedPlaces;
+}
+
+// Fast enrichment for production - minimal processing
+async function enrichPlaceDataFast(place: GooglePlace): Promise<Place> {
+  const basicPlace = formatGooglePlace(place);
+  
+  // Extract company type from name quickly
+  const companyType = extractCompanyType(place.name);
+  
+  // Determine industry from Google Places types
+  const industry = determineIndustry(place.types);
+  
+  // Quick estimates without external API calls
+  const revenue = estimateRevenue(place.name);
+  const employeeCount = estimateEmployeeCount(place.name);
+  const yearFounded = estimateFoundingYear();
+  
+  const enrichedPlace: Place = {
+    ...basicPlace,
+    id: 0,
+    stored_at: new Date(),
+    
+    // Basic enhanced fields
+    industry,
+    revenue,
+    employee_count: employeeCount,
+    company_type: companyType,
+    year_founded: yearFounded,
+    company_age: yearFounded ? new Date().getFullYear() - yearFounded : undefined,
+    
+    // Basic contact info (no verification in fast mode)
+    phone_verified: false,
+    website_status: place.website ? 'unknown' : undefined,
+    
+    // Fast enrichment metadata
+    enrichment_level: 'fast',
+    last_enriched_at: new Date(),
+    data_sources: {
+      google_places: true,
+      fast_mode: true,
+      estimates_only: true
+    }
+  };
+  
+  return enrichedPlace;
 }
 
 // Integration with external APIs for revenue and employee data
