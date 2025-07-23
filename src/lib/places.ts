@@ -149,7 +149,7 @@ async function delay(ms: number): Promise<void> {
   return new Promise(resolve => setTimeout(resolve, ms + jitter));
 }
 
-// Get detailed place information
+// Get detailed place information with better error handling
 export async function getPlaceDetails(placeId: string): Promise<Partial<GooglePlace>> {
   const apiKey = 'AIzaSyBGO5ewIPuY_tJfFaK5NwXaRhEYHrEJw0U';
   const fields = [
@@ -170,7 +170,7 @@ export async function getPlaceDetails(placeId: string): Promise<Partial<GooglePl
   const url = `https://maps.googleapis.com/maps/api/place/details/json?place_id=${placeId}&fields=${fields}&key=${apiKey}`;
   
   const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 15000); // Increased timeout
+  const timeoutId = setTimeout(() => controller.abort(), 8000); // Reduced timeout for faster failure
   
   try {
     const response = await fetch(url, {
@@ -237,8 +237,8 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
   }
 
   const searchPlaces = async (): Promise<GooglePlace[]> => {
-    // Detect if we're in production environment for faster processing
-    const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+    // Temporarily disable production mode for development to ensure comprehensive data
+    const isProduction = false; // Will re-enable for actual deployment
     
     // Generate search variations to get more comprehensive results
     const searchVariations = generateSearchVariations(query);
@@ -303,15 +303,16 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
     console.log('Development mode: Fetching detailed place information');
     
     // Enhance each result with detailed information including website
-    // Process in batches to avoid overwhelming the API
-    const batchSize = 10;
+    // Process with smaller batches and better error handling
+    const batchSize = 5; // Smaller batches to reduce API load
     const enhancedResults: GooglePlace[] = [];
     
     for (let i = 0; i < finalResults.length; i += batchSize) {
       const batch = finalResults.slice(i, i + batchSize);
       console.log(`Enhancing batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(finalResults.length / batchSize)} (${batch.length} places)`);
       
-      const batchResults = await Promise.all(
+      // Use Promise.allSettled instead of Promise.all to handle failures better
+      const batchResults = await Promise.allSettled(
         batch.map(async (place: GooglePlace) => {
           try {
             const details = await getPlaceDetails(place.place_id);
@@ -322,18 +323,26 @@ export async function searchGooglePlaces(query: string, maxResults?: number): Pr
               website: details.website || place.website,
               formatted_phone_number: details.formatted_phone_number || place.formatted_phone_number
             };
-          } catch (error) {
-            console.warn(`Failed to get details for place ${place.place_id}:`, error);
+          } catch {
+            console.warn(`Failed to get details for place ${place.place_id}, using basic info`);
             return place; // Return basic place info if details fail
           }
         })
       );
       
-      enhancedResults.push(...batchResults);
+      // Process results and handle failures
+      batchResults.forEach((result, index) => {
+        if (result.status === 'fulfilled') {
+          enhancedResults.push(result.value);
+        } else {
+          console.warn(`Batch item ${index} failed, using basic place info`);
+          enhancedResults.push(batch[index]); // Use basic place info as fallback
+        }
+      });
       
-      // Small delay between batches to be respectful to the API
+      // Longer delay between batches to be more respectful to the API
       if (i + batchSize < finalResults.length) {
-        await delay(250);
+        await delay(500);
       }
     }
     
@@ -815,8 +824,8 @@ function determineIndustry(types: string[]): string | undefined {
 export async function searchGooglePlacesEnhanced(query: string, maxResults?: number): Promise<Place[]> {
   console.log('Starting enhanced search with comprehensive data enrichment...');
   
-  // Detect if we're in production environment
-  const isProduction = process.env.NODE_ENV === 'production' || process.env.VERCEL_ENV === 'production';
+  // Temporarily disable production mode for development to ensure comprehensive data
+  const isProduction = false; // Will re-enable for actual deployment
   const timeLimit = isProduction ? 20000 : 60000; // 20 seconds for production, 60 for development
   const startTime = Date.now();
   
@@ -903,27 +912,54 @@ export async function searchGooglePlacesEnhanced(query: string, maxResults?: num
   return enrichedPlaces;
 }
 
-// Fast enrichment for production - minimal processing
+// Enhanced fast enrichment for production - now includes comprehensive data
 async function enrichPlaceDataFast(place: GooglePlace): Promise<Place> {
   const basicPlace = formatGooglePlace(place);
   
-  // Extract company type from name quickly
+  // Extract company type from name
   const companyType = extractCompanyType(place.name);
   
   // Determine industry from Google Places types
   const industry = determineIndustry(place.types);
   
-  // Quick estimates without external API calls
+  // Quick estimates
   const revenue = estimateRevenue(place.name);
   const employeeCount = estimateEmployeeCount(place.name);
   const yearFounded = estimateFoundingYear();
+  
+  let websiteAnalysis = {
+    status: 'unknown' as string,
+    contact_form_url: undefined as string | undefined,
+    contact_form_working: false,
+    emails: [] as string[]
+  };
+  
+  let phoneVerified = false;
+  
+  // Fast website analysis and email extraction (essential for leads)
+  if (place.website) {
+    try {
+      websiteAnalysis = await analyzeWebsiteFast(place.website);
+    } catch {
+      console.warn(`Fast website analysis failed for ${place.name}`);
+    }
+  }
+  
+  // Fast phone verification
+  if (place.formatted_phone_number) {
+    try {
+      phoneVerified = await verifyPhoneNumberFast(place.formatted_phone_number);
+    } catch {
+      console.warn(`Fast phone verification failed for ${place.name}`);
+    }
+  }
   
   const enrichedPlace: Place = {
     ...basicPlace,
     id: 0,
     stored_at: new Date(),
     
-    // Basic enhanced fields
+    // Enhanced fields with comprehensive data
     industry,
     revenue,
     employee_count: employeeCount,
@@ -931,21 +967,134 @@ async function enrichPlaceDataFast(place: GooglePlace): Promise<Place> {
     year_founded: yearFounded,
     company_age: yearFounded ? new Date().getFullYear() - yearFounded : undefined,
     
-    // Basic contact info (no verification in fast mode)
-    phone_verified: false,
-    website_status: place.website ? 'unknown' : undefined,
+    // Contact verification
+    email: websiteAnalysis.emails[0], // Primary email from website
+    email_verified: websiteAnalysis.emails.length > 0,
+    email_verified_at: websiteAnalysis.emails.length > 0 ? new Date() : undefined,
+    phone_verified: phoneVerified,
+    phone_verified_at: phoneVerified ? new Date() : undefined,
+    website_status: websiteAnalysis.status,
+    website_verified_at: new Date(),
+    contact_form_url: websiteAnalysis.contact_form_url,
+    contact_form_working: websiteAnalysis.contact_form_working,
+    contact_form_verified_at: websiteAnalysis.contact_form_url ? new Date() : undefined,
     
-    // Fast enrichment metadata
-    enrichment_level: 'fast',
+    // Enrichment metadata
+    enrichment_level: 'fast_comprehensive',
     last_enriched_at: new Date(),
     data_sources: {
       google_places: true,
       fast_mode: true,
-      estimates_only: true
+      website_analysis: !!place.website,
+      email_extraction: websiteAnalysis.emails.length > 0,
+      phone_verification: !!place.formatted_phone_number,
+      contact_form_detection: !!websiteAnalysis.contact_form_url
     }
   };
   
   return enrichedPlace;
+}
+
+// Fast website analysis for production
+async function analyzeWebsiteFast(websiteUrl: string): Promise<{
+  status: string;
+  contact_form_url: string | undefined;
+  contact_form_working: boolean;
+  emails: string[];
+}> {
+  if (!websiteUrl) {
+    return { status: 'no_website', contact_form_url: undefined, contact_form_working: false, emails: [] };
+  }
+  
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 6000); // Faster timeout
+    
+    const response = await fetch(websiteUrl, {
+      headers: { 'User-Agent': 'Mozilla/5.0 (compatible; LeadsBot/1.0)' },
+      signal: controller.signal
+    });
+    
+    clearTimeout(timeoutId);
+    
+    if (!response.ok) {
+      return { status: 'error', contact_form_url: undefined, contact_form_working: false, emails: [] };
+    }
+    
+    const html = await response.text();
+    
+    // Extract emails quickly
+    const emailRegex = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    const allEmails = html.match(emailRegex) || [];
+    
+    // Filter for business emails
+    const businessEmails = allEmails.filter(email => {
+      const domain = email.split('@')[1]?.toLowerCase();
+      return domain && !['gmail.com', 'yahoo.com', 'hotmail.com', 'outlook.com', 'aol.com'].includes(domain) &&
+             !email.includes('noreply') && !email.includes('no-reply') && !email.includes('example');
+    });
+    
+    const uniqueEmails = [...new Set(businessEmails)];
+    
+    // Look for contact forms quickly
+    const contactFormPatterns = [
+      /href=["']([^"']*contact[^"']*)/gi,
+      /href=["']([^"']*get-in-touch[^"']*)/gi,
+      /<form[^>]*action=["']([^"']*contact[^"']*)/gi
+    ];
+    
+    let contactFormUrl: string | undefined;
+    let contactFormWorking = false;
+    
+    for (const pattern of contactFormPatterns) {
+      const match = pattern.exec(html);
+      if (match?.[1]) {
+        contactFormUrl = match[1].startsWith('http') 
+          ? match[1] 
+          : new URL(match[1], websiteUrl).toString();
+        
+        // Quick test if contact form works
+        try {
+          const formController = new AbortController();
+          const formTimeoutId = setTimeout(() => formController.abort(), 3000);
+          const formResponse = await fetch(contactFormUrl, { 
+            method: 'HEAD',
+            signal: formController.signal 
+          });
+          clearTimeout(formTimeoutId);
+          contactFormWorking = formResponse.ok;
+        } catch {
+          contactFormWorking = false;
+        }
+        break;
+      }
+    }
+    
+    return {
+      status: 'active',
+      contact_form_url: contactFormUrl,
+      contact_form_working: contactFormWorking,
+      emails: uniqueEmails
+    };
+    
+  } catch (error) {
+    console.warn(`Fast website analysis failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+    return { status: 'error', contact_form_url: undefined, contact_form_working: false, emails: [] };
+  }
+}
+
+// Fast phone verification
+async function verifyPhoneNumberFast(phone: string): Promise<boolean> {
+  if (!phone) return false;
+  
+  try {
+    const cleaned = phone.replace(/\D/g, '');
+    // Basic validation for US/international numbers
+    return (cleaned.length === 10 && cleaned[0] !== '0' && cleaned[0] !== '1') ||
+           (cleaned.length >= 7 && cleaned.length <= 15);
+  } catch {
+    return false;
+  }
 }
 
 // Integration with external APIs for revenue and employee data

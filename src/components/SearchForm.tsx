@@ -20,6 +20,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
   const [smartQuery, setSmartQuery] = useState('');
   const [maxResults, setMaxResults] = useState(20);
   const [isParsingQuery, setIsParsingQuery] = useState(false);
+  const [forceFresh, setForceFresh] = useState(false);
 
   const handleSmartQueryChange = (value: string) => {
     setSmartQuery(value);
@@ -52,8 +53,8 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
         }
         
         if (response.data) {
-          // Use parsed parameters for search with specified max results
-          onSearch(response.data.searchParams, false, maxResults);
+          // Use parsed parameters for search with specified max results and fresh data preference
+          onSearch(response.data.searchParams, forceFresh, maxResults);
         }
       } catch (error) {
         console.error('Parse query error:', error);
@@ -132,33 +133,81 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
             </div>
           </div>
 
-          {/* Number of Results */}
-          <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center space-x-3">
-                <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
-                  <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
-                </svg>
-                <label htmlFor="maxResults" className="text-sm font-medium text-blue-800">
-                  Number of leads to find:
-                </label>
+          {/* Search Options */}
+          <div className="space-y-4">
+            {/* Number of Results */}
+            <div className="p-4 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-xl border border-blue-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <svg className="w-5 h-5 text-blue-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fillRule="evenodd" d="M3 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm0 4a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1z" clipRule="evenodd" />
+                  </svg>
+                  <label htmlFor="maxResults" className="text-sm font-medium text-blue-800">
+                    Number of leads to find:
+                  </label>
+                </div>
+                <div className="flex items-center space-x-3">
+                  <input
+                    id="maxResults"
+                    type="number"
+                    min="1"
+                    max="60"
+                    value={maxResults}
+                    onChange={(e) => handleMaxResultsChange(Number.parseInt(e.target.value) || 1)}
+                    className="w-20 px-3 py-2 bg-white border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 text-center font-semibold text-blue-900"
+                    disabled={isLoading || isParsingQuery}
+                  />
+                  <span className="text-sm text-blue-600 font-medium">leads</span>
+                </div>
               </div>
-              <div className="flex items-center space-x-3">
-                <input
-                  id="maxResults"
-                  type="number"
-                  min="1"
-                  max="60"
-                  value={maxResults}
-                  onChange={(e) => handleMaxResultsChange(Number.parseInt(e.target.value) || 1)}
-                  className="w-20 px-3 py-2 bg-white border-2 border-blue-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all duration-200 text-center font-semibold text-blue-900"
-                  disabled={isLoading || isParsingQuery}
-                />
-                <span className="text-sm text-blue-600 font-medium">leads</span>
+              <div className="mt-2 text-xs text-blue-600">
+                Choose between 1-60 leads. More leads = more comprehensive market coverage but longer search time.
               </div>
             </div>
-            <div className="mt-2 text-xs text-blue-600">
-              Choose between 1-60 leads. More leads = more comprehensive market coverage but longer search time.
+
+            {/* Fresh Data Option */}
+            <div className="p-4 bg-gradient-to-r from-green-50 to-emerald-50 rounded-xl border border-green-200">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center space-x-3">
+                  <svg className="w-5 h-5 text-green-600" fill="currentColor" viewBox="0 0 20 20" aria-hidden="true">
+                    <path fillRule="evenodd" d="M4 2a1 1 0 011 1v2.101a7.002 7.002 0 0111.601 2.566 1 1 0 11-1.885.666A5.002 5.002 0 005.999 7H9a1 1 0 010 2H4a1 1 0 01-1-1V3a1 1 0 011-1zm.008 9.057a1 1 0 011.276.61A5.002 5.002 0 0014.001 13H11a1 1 0 110-2h5a1 1 0 011 1v5a1 1 0 11-2 0v-2.101a7.002 7.002 0 01-11.601-2.566 1 1 0 01.61-1.276z" clipRule="evenodd" />
+                  </svg>
+                  <div className="flex flex-col">
+                    <label htmlFor="forceFresh" className="text-sm font-medium text-green-800">
+                      Fetch Fresh Data from Google
+                    </label>
+                    <p className="text-xs text-green-600 mt-1">
+                      Get the most up-to-date information directly from Google Places
+                    </p>
+                  </div>
+                </div>
+                <div className="flex items-center">
+                  <input
+                    id="forceFresh"
+                    type="checkbox"
+                    checked={forceFresh}
+                    onChange={(e) => setForceFresh(e.target.checked)}
+                    className="w-5 h-5 text-green-600 bg-white border-2 border-green-200 rounded focus:ring-green-500 focus:ring-2 transition-all duration-200"
+                    disabled={isLoading || isParsingQuery}
+                  />
+                </div>
+              </div>
+              <div className="mt-2 flex items-center space-x-4 text-xs">
+                <div className="flex items-center space-x-1">
+                  <span className="w-2 h-2 bg-gray-400 rounded-full"></span>
+                  <span className="text-gray-600">
+                    {forceFresh ? 'Fresh data (slower, most current)' : 'Cached data (faster, may be recent)'}
+                  </span>
+                </div>
+                <div className="flex items-center space-x-1">
+                  <svg className="w-3 h-3 text-green-600" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-green-600">
+                    {forceFresh ? '+30-60s search time' : 'Optimized speed'}
+                  </span>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -176,7 +225,7 @@ export default function SearchForm({ onSearch, isLoading }: SearchFormProps) {
               ) : isLoading ? (
                 <div className="flex items-center">
                   <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-white mr-3" />
-                  Finding {maxResults} comprehensive leads...
+                  Finding {maxResults} {forceFresh ? 'fresh' : 'comprehensive'} leads...
                 </div>
               ) : (
                 <div className="flex items-center">
