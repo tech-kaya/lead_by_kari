@@ -830,7 +830,7 @@ export async function searchGooglePlacesEnhanced(query: string, maxResults?: num
 }
 
 // Integration with external APIs for revenue and employee data
-export async function getCompanyFinancialData(companyName: string, website?: string): Promise<{
+export async function getCompanyFinancialData(companyName: string): Promise<{
   revenue?: string;
   revenue_exact?: number;
   employee_count?: string;
@@ -854,7 +854,7 @@ export async function getCompanyFinancialData(companyName: string, website?: str
       revenue: estimateRevenue(companyName),
       employee_count: estimateEmployeeCount(companyName),
       company_type: extractCompanyType(companyName),
-      year_founded: estimateFoundingYear(companyName)
+      year_founded: estimateFoundingYear()
     };
     
     return mockData;
@@ -899,7 +899,7 @@ function estimateEmployeeCount(companyName: string): string | undefined {
 }
 
 // Estimate founding year based on company indicators
-function estimateFoundingYear(_companyName: string): number | undefined {
+function estimateFoundingYear(): number | undefined {
   // This is a simplified estimation - in production, use business registry APIs
   const currentYear = new Date().getFullYear();
   

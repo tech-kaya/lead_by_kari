@@ -46,17 +46,10 @@ interface CompanyEnrichmentData {
   technologies?: string[];
   social_profiles?: Record<string, string>;
   data_source?: string;
-  [key: string]: any; // Allow dynamic property access
+  [key: string]: unknown; // Allow dynamic property access
 }
 
-// Verification result types
-type PhoneVerification = { type: 'phone'; verified: boolean };
-type EmailVerification = { type: 'email'; verified: boolean };
-type WebsiteVerification = { type: 'website'; status: string };
-type ExtractedEmailVerification = { type: 'extracted_email'; email: string | null };
-type ContactFormVerification = { type: 'contact_form'; url: string | null; working: boolean };
 
-type VerificationResult = PhoneVerification | EmailVerification | WebsiteVerification | ExtractedEmailVerification | ContactFormVerification;
 
 // The Companies API integration
 async function enrichWithCompaniesAPI(domain: string): Promise<CompanyEnrichmentData | null> {
@@ -125,7 +118,7 @@ async function enrichWithClearbit(domain: string): Promise<CompanyEnrichmentData
       revenue_exact: data.metrics?.estimatedAnnualRevenue,
       employee_count: data.metrics?.employees ? `${data.metrics.employees}` : undefined,
       employee_count_exact: data.metrics?.employees,
-      company_type: data.legalName?.includes('LLC') ? 'LLC' : data.legalName?.includes('Corp') ? 'Corp' : 'Inc',
+      company_type: data.legalName?.includes('LLC') ? 'LLC' : (data.legalName?.includes('Corp') ? 'Corp' : 'Inc'),
       year_founded: data.foundedYear,
       email: data.email,
       data_source: 'clearbit'
@@ -228,9 +221,8 @@ async function verifyWebsite(url: string): Promise<string> {
     
     if (response.ok) {
       return response.url !== websiteUrl ? 'redirected' : 'active';
-    } else {
-      return 'inactive';
     }
+    return 'inactive';
   } catch (error) {
     console.error('Website verification error:', error);
     return 'broken';
@@ -335,7 +327,7 @@ export async function enrichCompanyData(place: Place): Promise<EnhancedPlace> {
   console.log(`Starting comprehensive enrichment for: ${place.name}`);
   
   const enrichedData: Partial<EnhancedPlace> = { ...place };
-  const dataSources: Record<string, any> = {};
+  const dataSources: Record<string, unknown> = {};
   
   try {
     // Extract domain from website
@@ -366,7 +358,7 @@ export async function enrichCompanyData(place: Place): Promise<EnhancedPlace> {
     const enrichmentResults = await Promise.allSettled(enrichmentPromises);
     
     // Process enrichment results
-    enrichmentResults.forEach((result, index) => {
+    for (const result of enrichmentResults) {
       if (result.status === 'fulfilled' && result.value.data) {
         const { source, data } = result.value;
         dataSources[source] = data;
@@ -380,7 +372,7 @@ export async function enrichCompanyData(place: Place): Promise<EnhancedPlace> {
           enrichedData.employee_count = data.employee_count as string;
         }
       }
-    });
+    }
     
     // Verify contact information
     const verificationPromises = [];
@@ -405,7 +397,7 @@ export async function enrichCompanyData(place: Place): Promise<EnhancedPlace> {
       );
     }
     
-    const verificationResults = await Promise.allSettled(verificationPromises);
+    await Promise.allSettled(verificationPromises);
     
     // Simplified verification handling to avoid complex type issues
     // In production, implement proper type-safe verification

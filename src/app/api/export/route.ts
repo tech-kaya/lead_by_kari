@@ -25,7 +25,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Get comprehensive data for all requested places
-    const placeholders = place_ids.map((_: string, index: number) => `$${index + 1}`).join(',');
     const query = `
       SELECT 
         name,

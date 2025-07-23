@@ -3,6 +3,8 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/db';
 import { getUserFromRequest } from '@/lib/auth';
 
+/* eslint-disable @typescript-eslint/no-explicit-any */
+
 export async function POST(request: NextRequest) {
   try {
     // Check authentication
@@ -78,8 +80,8 @@ export async function POST(request: NextRequest) {
       results: enrichmentResults,
       summary: {
         total: place_ids.length,
-        enriched: enrichmentResults.filter((r: any) => r.status === 'enriched').length,
-        failed: enrichmentResults.filter((r: any) => r.error).length
+        enriched: enrichmentResults.filter((r: unknown) => (r as { status?: string }).status === 'enriched').length,
+        failed: enrichmentResults.filter((r: unknown) => (r as { error?: string }).error).length
       }
     });
 
@@ -92,14 +94,22 @@ export async function POST(request: NextRequest) {
   }
 }
 
-// Comprehensive place enrichment function
-async function enrichPlace(place: any) {
-  const enrichedData: any = {};
+interface PlaceRow {
+  place_id: string;
+  name: string;
+  website?: string;
+  phone?: string;
+  [key: string]: unknown;
+}
+
+// Comprehensive place enrichment function  
+async function enrichPlace(place: PlaceRow): Promise<Record<string, any>> {
+  const enrichedData: Record<string, any> = {};
   
   try {
     // Extract domain from website
     let domain = '';
-    if (place.website) {
+    if (place.website && typeof place.website === 'string') {
       try {
         const url = new URL(place.website.startsWith('http') ? place.website : `https://${place.website}`);
         domain = url.hostname.replace('www.', '');
@@ -132,7 +142,7 @@ async function enrichPlace(place: any) {
           }
           
           // Extract email pattern
-          if (data.secondaries?.emailPatterns?.[0]) {
+          if (data.secondaries?.emailPatterns?.[0] && typeof data.secondaries.emailPatterns[0] === 'string') {
             enrichedData.email = data.secondaries.emailPatterns[0]
               .replace('{first}', 'info')
               .replace('{last}', '');
@@ -144,7 +154,7 @@ async function enrichPlace(place: any) {
     }
 
     // Verify phone number
-    if (place.phone) {
+    if (place.phone && typeof place.phone === 'string') {
       const cleaned = place.phone.replace(/\D/g, '');
       const isValid = (cleaned.length === 10 && cleaned[0] !== '0' && cleaned[0] !== '1') ||
                      (cleaned.length >= 7 && cleaned.length <= 15);
@@ -160,7 +170,7 @@ async function enrichPlace(place: any) {
     }
 
     // Verify website and extract additional info
-    if (place.website) {
+    if (place.website && typeof place.website === 'string') {
       try {
         const websiteUrl = place.website.startsWith('http') ? place.website : `https://${place.website}`;
         const controller = new AbortController();
@@ -182,7 +192,7 @@ async function enrichPlace(place: any) {
         enrichedData.website_verified_at = new Date();
 
         // Try to extract email from website
-        if (!enrichedData.email) {
+        if (!enrichedData.email && typeof websiteUrl === 'string') {
           try {
             const htmlController = new AbortController();
             const htmlTimeoutId = setTimeout(() => htmlController.abort(), 15000);
@@ -220,7 +230,7 @@ async function enrichPlace(place: any) {
               
               if (contactMatches) {
                 const contactUrl = contactMatches[0].match(/href=["']([^"']*)/)?.[1];
-                if (contactUrl) {
+                if (contactUrl && typeof contactUrl === 'string' && typeof websiteUrl === 'string') {
                   enrichedData.contact_form_url = contactUrl.startsWith('http') ? 
                     contactUrl : 
                     new URL(contactUrl, websiteUrl).href;
@@ -276,7 +286,7 @@ async function enrichPlace(place: any) {
 }
 
 // Update place with enriched data
-async function updatePlaceWithEnrichment(placeId: string, enrichedData: any) {
+async function updatePlaceWithEnrichment(placeId: string, enrichedData: Record<string, any>) {
   const updateQuery = `
     UPDATE places SET
       industry = COALESCE($2, industry),
